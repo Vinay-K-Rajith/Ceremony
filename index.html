@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Keyboard Controller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+        }
+
+        /* Video background */
+        #videoContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Control overlay */
+        .controls-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: flex-start;
+            padding: 40px;
+            z-index: 10;
+            pointer-events: none;
+            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+        }
+
+        .info-panel {
+            color: #fff;
+            font-size: 18px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            display: none;
+        }
+
+        .section-info {
+            color: #4CAF50;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .time-info {
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .loop-status {
+            color: #FFC107;
+            margin-bottom: 20px;
+        }
+
+        .keyboard-guide {
+            color: #90CAF9;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .keyboard-guide div {
+            margin-bottom: 5px;
+        }
+
+        .key {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-block;
+            min-width: 25px;
+            text-align: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            z-index: 5;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        /* Right side sacred text display */
+        .sacred-text-overlay {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-end;
+            padding: 40px 80px;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .sacred-text-overlay.active {
+            opacity: 1;
+        }
+
+        .sacred-text {
+            text-align: right;
+            text-shadow: 3px 3px 8px rgba(0,0,0,0.9);
+        }
+
+        .tamil-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+
+        .english-text {
+            font-size: 32px;
+            color: #FFC107;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .info-panel.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Video Container -->
+    <div id="videoContainer">
+        <video id="videoPlayer" muted playsinline>
+            <source src="kv.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <!-- Control Overlay -->
+    <div class="controls-overlay">
+        <div class="info-panel">
+            <div class="section-info" id="sectionDisplay">Ready - Press 1-5</div>
+            <div class="time-info" id="timeDisplay">00:00 / --:--</div>
+            <div class="loop-status" id="loopStatus"></div>
+            <div class="keyboard-guide">
+                <div><span class="key">1</span> - Section 1: 0-4s (loop 3-4s)</div>
+                <div><span class="key">2</span> - Section 2: 4-9s (loop 8-9s)</div>
+                <div><span class="key">3</span> - Section 3: 9-14s (loop 13-14s)</div>
+                <div><span class="key">4</span> - Section 4: 14-16s (loop 15-16s)</div>
+                <div><span class="key">5</span> - Play remaining video</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sacred Text Overlay (Right Side) -->
+    <div class="sacred-text-overlay" id="sacredTextOverlay">
+        <div class="sacred-text">
+            <div class="tamil-text">ஒளி பரவட்டும், இருள் விலகட்டும்</div>
+            <div class="english-text">Let Light Spread, Let Darkness Vanish</div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('videoPlayer');
+        const sectionDisplay = document.getElementById('sectionDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const loopStatus = document.getElementById('loopStatus');
+        const progressFill = document.getElementById('progressFill');
+        const sacredTextOverlay = document.getElementById('sacredTextOverlay');
+        const infoPanelElement = document.querySelector('.info-panel');
+
+        // Define video sections
+        const sections = {
+            1: { start: 0, end: 4, loopStart: 3, loopEnd: 4, name: 'Section 1' },
+            2: { start: 4, end: 9, loopStart: 9, loopEnd: 10, name: 'Section 2' },
+            3: { start: 10, end: 14, loopStart: 14, loopEnd: 15, name: 'Section 3' },
+            4: { start: 14, end: 16, loopStart: 16, loopEnd: 17, name: 'Section 4' },
+            5: { start: 17, end: 28, loopStart: 25, loopEnd: 29.9, name: 'Remaining Video' }
+        };
+
+        // Player state
+        let currentSection = null;
+        let isLooping = false;
+        let shouldLoop = false;
+
+        // Format time display
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        // Update display info
+        function updateDisplay() {
+            const duration = video.duration || 0;
+            const current = video.currentTime;
+            
+            timeDisplay.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+            
+            if (duration > 0) {
+                progressFill.style.width = (current / duration) * 100 + '%';
+            }
+        }
+
+        // Play a specific section
+        function playSection(sectionNum) {
+            const section = sections[sectionNum];
+            if (!section) return;
+
+            currentSection = sectionNum;
+            shouldLoop = true;
+            isLooping = false;
+
+            // Seek to start
+            video.currentTime = section.start;
+            video.play();
+
+            // Update display
+            sectionDisplay.textContent = section.name;
+            loopStatus.textContent = shouldLoop ? '🔄 Looping enabled' : '▶ Playing to end';
+        }
+
+        // Monitor video playback for looping
+        video.addEventListener('timeupdate', () => {
+            updateDisplay();
+
+            if (!currentSection || !shouldLoop) return;
+
+            const section = sections[currentSection];
+            if (!section.loopStart) return;
+
+            // If we've reached the end of the section, loop back
+            if (video.currentTime >= section.loopEnd) {
+                video.currentTime = section.loopStart;
+                isLooping = true;
+                loopStatus.textContent = '🔄 LOOPING';
+            }
+
+            // Check if in the sacred text loop range (25-29.9 seconds in section 5)
+            const inSacredTextRange = currentSection === 5 && 
+                                     video.currentTime >= 25 && 
+                                     video.currentTime <= 29.9;
+            
+            if (inSacredTextRange) {
+                sacredTextOverlay.classList.add('active');
+                infoPanelElement.classList.add('hidden');
+            } else {
+                sacredTextOverlay.classList.remove('active');
+                infoPanelElement.classList.remove('hidden');
+            }
+        });
+
+        // Set first frame on load
+        video.addEventListener('loadedmetadata', () => {
+            video.currentTime = 0;
+            updateDisplay();
+            sectionDisplay.textContent = 'Ready - Press 1-5';
+            loopStatus.textContent = '';
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            const key = e.key;
+            
+            if (key === '1' || key === '2' || key === '3' || key === '4' || key === '5') {
+                e.preventDefault();
+                playSection(parseInt(key));
+            }
+        });
+
+        // Handle video end
+        video.addEventListener('ended', () => {
+            sectionDisplay.textContent = 'Video Ended';
+            loopStatus.textContent = 'Press 1-5 to continue';
+        });
+    </script>
+</body>
+</html>
